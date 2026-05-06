@@ -271,12 +271,13 @@ int main(int argc, char* argv[]) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 3");
     SetTargetFPS(60);
 
-    char* filename = "input.txt";
-    if (argc > 1) {
-        filename = argv[1];
+    // char* filename = "input.txt";
+    if (argc < 2) {
+        printf("Usage: %s <filename>\n", argv[0]);
+        return 1;   
     }
 
-    FILE* file = fopen(filename, "r");
+    FILE* file = fopen(argv[1], "r");
     if (!file) {
         perror("Error opening input file");
         return EXIT_FAILURE;

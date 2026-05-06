@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 
-#define MAX_NODES 100
-#define INF 2147483647
+#define MAX_NODES 15
+#define INF INT_MAX
 
 typedef struct Edge {
     int destination;
@@ -23,7 +23,7 @@ typedef struct Graph {
 
 /* Graph */
 Graph* createGraph(int numNodes);
-void addEdge(Graph* graph, int src, int dest, int weight);
+bool addEdge(Graph* graph, int src, int dest, int weight);
 void freeGraph(Graph* graph);
 
 /* Dijkstra */

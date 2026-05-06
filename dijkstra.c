@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <stdbool.h>
+#include "dijkstra.h"
 
 
 #define MAX_NODES 15 // As requested in the project instructions: max 15 nodes
@@ -10,101 +11,150 @@
 // int parent[MAX_NODES];
 // bool visited[MAX_NODES];
 // each pint of the graph and the wight of it
-typedef struct Edge {
-    int to;
-    int weight;
-    struct Edge *next;
-}Edge;
-// group of edge make a graph
-typedef struct {
-    Edge **first;
-    int vertices; //pints
-}Graph;
-
-Graph *create_graph(int vertices) {
-    Graph *g = malloc(sizeof(Graph));
-    if (!g) return NULL;
-
-    g->vertices = vertices;
-    g->first = calloc(vertices, sizeof(Edge *));
-    if (!g->first) {
-        free(g);
-        return NULL;
-    }
-
-    return g;
-}
-bool add_edge(Graph *g, int src, int dst, int weight) {
-    Edge *e = malloc(sizeof(Edge));
-    if (!e) return false;
-
-    e->to = dst;
+Edge* createEdge(int dest, int weight) {
+    Edge* e = malloc(sizeof(Edge));
+    e->destination = dest;
     e->weight = weight;
     e->next = NULL;
+    return e;
+}
 
-    if (g->first[src] == NULL) {
-        g->first[src] = e;
+Graph* createGraph(int numNodes) {
+    Graph* graph = malloc(sizeof(Graph));
+    graph->numNodes = numNodes;
+    graph->adjList = malloc(numNodes * sizeof(Node));
+
+    for (int i = 0; i < numNodes; i++) {
+        graph->adjList[i].head = NULL;
+    }
+
+    return graph;
+}
+
+void addEdge(Graph *graph, int src, int dest, int weight) {
+    Edge* e = createEdge(dest, weight);
+
+    if (!graph->adjList[src].head) {
+        graph->adjList[src].head = e;
     } else {
-        Edge *temp = g->first[src];
-        while (temp->next != NULL) {
-            temp = temp->next;
-        }
+        Edge* temp = graph->adjList[src].head;
+        while (temp->next) temp = temp->next;
         temp->next = e;
     }
-
-    return true;
 }
 
 
-static void free_graph(Graph *graph) {
-    if (graph == NULL || graph->first == NULL) {
-        return;
+ void freeGraph(Graph *graph) {
+
+    for (int i = 0; i < graph->numNodes; i++) {
+        Edge* current = graph->adjList[i].head;
+        while (current) {
+            Edge* tmp = current;
+            current = current->next;
+            free(tmp);
+        }
     }
-    for (int i = 0; i < graph->vertices; i++) { Edge *current = graph->first[i];
-        while (current != NULL) { Edge *next = current->next; free(current); current = next; }
-    }
-    free(graph->first);
-    graph->first = NULL;
-    graph->vertices = 0;
+    free(graph->adjList);
+        free(graph);
+
 }
 // 3. Dijkstra's Algorithm Implementation
-static void run_dijkstra(const Graph *graph, int source,int  *dist,  int *parent) {
-    bool *visited = calloc(graph->vertices, sizeof(bool));
-    // Initialize distances, parents, and visited arrays
-    for (int i = 0; i < graph->vertices; i++) {
-        dist[i] = INF;
-        parent[i] = -1;
-        // visited[i] = false;
-    }
-    dist[source] = 0;
-    // Find shortest path for all nodes
-    for (int i = 0; i < graph->vertices; i++) {
-            // Find the unvisited node with the minimum distance
-            int u = -1;
-            int min = INF ;
-        // pick unvisited minimum distance node
-            for (int v = 0; v < graph->vertices; v++) {
+bool dijkstra(Graph* graph, int startNode, int endNode,
+          int* path, int* pathLength, int* totalWeight) {
+
+        int dist[MAX_NODES];
+        int parent[MAX_NODES];
+        bool visited[MAX_NODES];
+
+        for (int i = 0; i < graph->numNodes; i++) {
+            dist[i] = INT_MAX;
+            parent[i] = -1;
+            visited[i] = false;
+        }
+
+        dist[startNode] = 0;
+
+        for (int i = 0; i < graph->numNodes; i++) {
+            int u = -1, min = INF;
+
+            for (int v = 0; v < graph->numNodes; v++) {
                 if (!visited[v] && dist[v] < min) {
                     min = dist[v];
                     u = v;
                 }
             }
-            // If all remaining nodes are unreachable, break
-            if (u == -1 || min ==INF) break;
-            visited[u] = true;
-            // Update the distances of the adjacent nodes
-            for (Edge *e = graph->first[u]; e; e = e->next) {
-                int v = e->to;
 
-                if (!visited[v] && dist[u] != INF && dist[u] + e->weight <= dist[v]) { // Changed <= to <
+            if (u == -1) break;
+            visited[u] = true;
+
+            for (Edge* e = graph->adjList[u].head; e; e = e->next) {
+                int v = e->destination;
+
+                if (!visited[v] &&
+                    dist[u] != INT_MAX &&
+                    dist[u] + e->weight < dist[v]) {
+
                     dist[v] = dist[u] + e->weight;
                     parent[v] = u;
-                }
+                    }
             }
         }
 
-    free(visited);
-}
+        *totalWeight = dist[endNode];
+
+        if (dist[endNode] == INF) {
+            *pathLength = 0;
+            return false;
+        }
+
+        int rev[MAX_NODES];
+        int idx = 0;
+
+        for (int at = endNode; at != -1; at = parent[at]) {
+            rev[idx++] = at;
+        }
+
+        *pathLength = idx;
+
+        for (int i = 0; i < idx; i++) {
+            path[i] = rev[idx - 1 - i];
+        }
+    }
+    // Initialize distances, parents, and visited arrays
+    // for (int i = 0; i < graph->numNodes; i++) {
+    //     dist[i] = INF;
+    //     parent[i] = -1;
+    //     // visited[i] = false;
+    // }
+    // dist[source] = 0;
+    // // Find shortest path for all nodes
+    // for (int i = 0; i < graph->vertices; i++) {
+    //         // Find the unvisited node with the minimum distance
+    //         int u = -1;
+    //         int min = INF ;
+    //     // pick unvisited minimum distance node
+    //         for (int v = 0; v < graph->vertices; v++) {
+    //             if (!visited[v] && dist[v] < min) {
+    //                 min = dist[v];
+    //                 u = v;
+    //             }
+    //         }
+    //         // If all remaining nodes are unreachable, break
+    //         if (u == -1 || min ==INF) break;
+    //         visited[u] = true;
+    //         // Update the distances of the adjacent nodes
+    //         for (Edge *e = graph->first[u]; e; e = e->next) {
+    //             int v = e->to;
+    //
+    //             if (!visited[v] && dist[u] != INF && dist[u] + e->weight <= dist[v]) { // Changed <= to <
+    //                 dist[v] = dist[u] + e->weight;
+    //                 parent[v] = u;
+    //             }
+    //         }
+    //     }
+    //
+    // free(visited);
+// }
 void print_path(int endNode, int *dist, int *parent) {
     // 4. Print the final results in the required format
     if (dist[endNode] == INF) {
@@ -123,7 +173,7 @@ void print_path(int endNode, int *dist, int *parent) {
         // Print the path from start to end with "->" separator
         for (int i = path_len - 1; i >= 0; i--) {
             printf("%d", path[i]);
-            if (i > 0) printf("->");
+            if (i > 0) printf(" -> ");
         }
 
         // Print the total weight of the shortest path
@@ -131,7 +181,8 @@ void print_path(int endNode, int *dist, int *parent) {
 
 }
 
-
+#ifdef DIJKSTRA_MAIN
+#include <stdio.h>
 
 int main( int argc, char **argv) {
     if (argc != 2) {
@@ -151,13 +202,13 @@ int main( int argc, char **argv) {
         fclose(file);
         return 0;
     }
-    Graph *g = create_graph(N);
+    Graph *g = createGraph(N);
     if (!g) return 1;
     // Read edges and weights from the file
     for (int i = 0; i < M; i++) {
         int u, v, w;
         fscanf(file, "%d %d %d", &u, &v, &w);
-        add_edge(g, u, v, w);
+        addEdge(g, u, v, w);
     }
 
 
@@ -168,20 +219,28 @@ int main( int argc, char **argv) {
     // Handle the edge case where the start node is the same as the end node
     if (startNode == endNode) {
         printf("%d\n0\n", startNode);
-        free_graph(g);
+        freeGraph(g);
         return 0;
     }
-    int *dist = malloc(N * sizeof(int));
-    int *parent = malloc(N * sizeof(int));
+    int path[MAX_NODES];
+    int pathLen = 0;
+    int totalWeight = 0;
 
-    run_dijkstra(g,startNode, dist, parent);
-    print_path(endNode, dist, parent);
+    if (!dijkstra(g, startNode, endNode, path, &pathLen, &totalWeight)) {
+        printf("No path found\n");
+    } else {
+        for (int i = 0; i < pathLen; i++) {
+            printf("%d", path[i]);
+            if (i < pathLen - 1) printf("->");
+        }
+        printf("\n%d\n", totalWeight);
+    }
 
-    free(dist);
-    free(parent);
-    free_graph(g);
+
+    freeGraph(g);
     // printf("Running DIJKSTRA file\n");
 
 
     return 0;
 }
+#endif

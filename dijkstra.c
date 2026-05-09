@@ -130,7 +130,7 @@ bool dijkstra(Graph* graph, int startNode, int endNode,
 
     return true;
 }
-#ifndef NO_MAIN
+#ifndef SIMULATION_MODE
 int main(int argc, char **argv) {
 if (argc != 2) {
     printf("Usage: %s <input_file>\n", argv[0]);

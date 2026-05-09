@@ -54,12 +54,14 @@ Use the provided `Makefile` to compile the project:
   ```bash
   make milestone2
   ```
-* **To compile everything:**
-  ```bash
-  make all
-  ```
+ 
+### 2. Cleaning Up
+To remove all compiled executables and start fresh:
+```bash
+clean all
+```
 
-### 2. Running the Programs
+### 3. Running the Programs
 Both programs require an input file as a command-line argument.
 
 * **Run Dijkstra CLI:**

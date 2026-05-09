@@ -57,9 +57,9 @@ Use the provided `Makefile` to compile the project:
  
 ### 2. Cleaning Up
 To remove all compiled executables and start fresh:
-```bash
-clean all
-```
+  ```bash
+  clean all
+  ```
 
 ### 3. Running the Programs
 Both programs require an input file as a command-line argument.

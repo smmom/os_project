@@ -16,6 +16,8 @@
 #define ENTITY_RADIUS 10
 #define MAX_TRAVELERS 10
 
+bool playing = true;
+
 typedef struct {
     pid_t pid;
     int arrivedAt;
@@ -24,13 +26,22 @@ typedef struct {
 } IPCMessage;
 
 // Manual Vector2 Helper Functions
-Vector2 MyVector2Sub(Vector2 v1, Vector2 v2) { return (Vector2){ v1.x - v2.x, v1.y - v2.y }; }
-Vector2 MyVector2Add(Vector2 v1, Vector2 v2) { return (Vector2){ v1.x + v2.x, v1.y + v2.y }; }
-Vector2 MyVector2Scale(Vector2 v, float scale) { return (Vector2){ v.x * scale, v.y * scale }; }
-float MyVector2Len(Vector2 v) { return sqrtf(v.x * v.x + v.y * v.y); }
+Vector2 MyVector2Sub(Vector2 v1, Vector2 v2)
+{ return (Vector2){ v1.x - v2.x, v1.y - v2.y }; }
+
+Vector2 MyVector2Add(Vector2 v1, Vector2 v2)
+{ return (Vector2){ v1.x + v2.x, v1.y + v2.y }; }
+
+Vector2 MyVector2Scale(Vector2 v, float scale)
+{ return (Vector2){ v.x * scale, v.y * scale }; }
+
+float MyVector2Len(Vector2 v)
+{ return sqrtf(v.x * v.x + v.y * v.y); }
+
 Vector2 MyVector2Norm(Vector2 v) {
     float length = MyVector2Len(v);
-    if (length > 0) return (Vector2){ v.x / length, v.y / length };
+    if (length > 0) 
+        return (Vector2) { v.x / length, v.y / length };
     return (Vector2){ 0, 0 };
 }
 
@@ -83,7 +94,8 @@ void DrawGraph(Graph* graph) {
     for (int i = 0; i < graph->numNodes; i++) {
         DrawCircleV(nodePositions[i].position, NODE_RADIUS, LIGHTGRAY);
         DrawCircleLines(nodePositions[i].position.x, nodePositions[i].position.y, NODE_RADIUS, DARKGRAY);
-        char nodeText[5]; sprintf(nodeText, "%d", i);
+        char nodeText[5]; 
+        sprintf(nodeText, "%d", i);
         DrawText(nodeText, nodePositions[i].position.x - MeasureText(nodeText, FONT_SIZE) / 2, nodePositions[i].position.y - FONT_SIZE / 2, FONT_SIZE, BLACK);
     }
     for (int i = 0; i < numTravelers; i++) {
@@ -98,57 +110,109 @@ void DrawGraph(Graph* graph) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) { fprintf(stderr, "Usage: %s <input_file>\n", argv[0]); return 1; }
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1; }
     FILE* file = fopen(argv[1], "r");
-    int numNodes, numEdges; fscanf(file, "%d %d", &numNodes, &numEdges);
+    int numNodes, numEdges;
+    fscanf(file, "%d %d", &numNodes, &numEdges);
     Graph* graph = createGraph(numNodes);
-    for (int i = 0; i < numEdges; i++) { int u, v, w; fscanf(file, "%d %d %d", &u, &v, &w); addEdge(graph, u, v, w); }
+
+    for (int i = 0; i < numEdges; i++) {
+        int u, v, w; fscanf(file, "%d %d %d", &u, &v, &w);
+        addEdge(graph, u, v, w);
+    }
     calculateNodePositions(numNodes);
     fscanf(file, "%d", &numTravelers);
     Color colors[] = {BLUE, GREEN, YELLOW, MAGENTA, ORANGE, LIME, SKYBLUE, VIOLET, BEIGE, BROWN};
-    int pipefd[2]; pipe(pipefd); fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
+
+    int pipefd[2]; pipe(pipefd);
+
+    fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
+
     for (int i = 0; i < numTravelers; i++) {
         fscanf(file, "%d %d", &travelers[i].startNode, &travelers[i].endNode);
-        travelers[i].color = colors[i % 10]; travelers[i].active = true;
+        travelers[i].color = colors[i % 10]; 
+        travelers[i].active = true;
         travelers[i].entityPosition = nodePositions[travelers[i].startNode].position;
         pid_t pid = fork();
+
         if (pid == 0) {
-            close(pipefd[0]); int p[MAX_NODES], len, w;
+            close(pipefd[0]);
+
+            int p[MAX_NODES], len, w;
+
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
                 for (int j = 0; j < len; j++) {
                     IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, (j == len - 1) };
                     write(pipefd[1], &m, sizeof(IPCMessage));
                     if (j < len - 1) {
                         int weight = 0; Edge* e = graph->adjList[p[j]].head;
-                        while (e) { if (e->destination == p[j+1]) { weight = e->weight; break; } e = e->next; }
+                        while (e) {
+                            if (e->destination == p[j+1]) {
+                            weight = e->weight; break;
+                        }
+                            e = e->next; }
                         usleep(weight * 300000);
                     }
                 }
             }
-            IPCMessage f = { getpid(), -1, -1, true }; write(pipefd[1], &f, sizeof(IPCMessage));
-            close(pipefd[1]); exit(0);
-        } else { travelers[i].pid = pid; }
+            IPCMessage f = { getpid(), -1, -1, true };
+            write(pipefd[1], &f, sizeof(IPCMessage));
+            close(pipefd[1]);
+            exit(0);
+        }
+        else { travelers[i].pid = pid; }
     }
     fclose(file); close(pipefd[1]);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 5");
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
         IPCMessage m;
+
+        /* ===== BUTTON ===== */
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            Vector2 m = GetMousePosition();
+            if (CheckCollisionPointRec(m,(Rectangle){10,10,80,30}))
+                playing = !playing;
+        }
+
         while (read(pipefd[0], &m, sizeof(IPCMessage)) > 0) {
             for (int i = 0; i < numTravelers; i++) {
                 if (travelers[i].pid == m.pid) {
-                    if (m.finished && m.arrivedAt == -1) { travelers[i].active = false; printf("[PID=%d] finished\n", m.pid); }
+                    if (m.finished && m.arrivedAt == -1) {
+                        travelers[i].active = false;
+                        printf("[PID=%d] finished\n", m.pid); 
+                    }
                     else {
-                        if (m.nextNode == -1) printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
-                        else printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);
-                        if (travelers[i].pathLength == 0) { int dw; dijkstra(graph, travelers[i].startNode, travelers[i].endNode, travelers[i].path, &travelers[i].pathLength, &dw); }
+                        if (m.nextNode == -1)
+                            printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
+
+                        else
+                            printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);
+
+                        if (travelers[i].pathLength == 0) {
+                            int dw; 
+                            dijkstra(graph, travelers[i].startNode, travelers[i].endNode, travelers[i].path, &travelers[i].pathLength, &dw);
+                        }
                         travelers[i].entityPosition = nodePositions[m.arrivedAt].position;
                     }
                 }
             }
         }
-        BeginDrawing(); ClearBackground(RAYWHITE); DrawGraph(graph); EndDrawing();
+        // button
+        DrawRectangle(10,10,80,30, playing?RED:GREEN);
+        DrawText(playing?"STOP":"PLAY",20,15,20,WHITE);
+
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawGraph(graph);
+        EndDrawing();
     }
-    for (int i = 0; i < numTravelers; i++) waitpid(travelers[i].pid, NULL, 0);
-    freeGraph(graph); CloseWindow(); return 0;
+    for (int i = 0; i < numTravelers; i++)
+        waitpid(travelers[i].pid, NULL, 0);
+
+    freeGraph(graph);
+    CloseWindow();
+    return 0;
 }

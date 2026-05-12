@@ -20,6 +20,8 @@ The project is divided into three main milestones:
 ## File Structure
 * `dijkstra.c`: Implementation of the graph data structure and Dijkstra's algorithm.
 * `sim.c`: Main simulation file containing the GUI logic, graph visualization, and path animation.
+* `milestone4.c`: Milestone 4 - Multi-processing with fork() and simultaneous animation of multiple travelers.
+* `milestone5.c`: Milestone 5 - Autonomous travelers using IPC (Pipes) to communicate their status to the parent process.
 * `Makefile`: Build script to compile the project milestones.
 * `input.txt`: Sample input file containing graph data (nodes, edges, and query).
 
@@ -54,7 +56,14 @@ Use the provided `Makefile` to compile the project:
   ```bash
   make milestone2
   ```
- 
+* **To compile Milestone 4:**
+  ```bash
+  make milestone4
+  ```
+* **To compile Milestone 5:**
+ ```bash
+  make milestone5
+  ```
 ### 2. Cleaning Up
 To remove all compiled executables and start fresh:
   ```bash

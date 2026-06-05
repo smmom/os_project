@@ -18,11 +18,12 @@ milestone3:
 	$(CC) $(CFLAGS) -DSIMULATION_MODE sim.c dijkstra.c -o sim $(RAYLIB)
 
 milestone4:
-	$(CC) $(CFLAGS) -DSIMULATION_MODE milestone4.c -o milestone4 $(INCLUDES) $(LDFLAGS)
+	$(CC) $(CFLAGS) -DSIMULATION_MODE milestone4.c dijkstra.c \
+ $(RAYLIB) -o milestone4
 
 milestone5:
-	$(CC) $(CFLAGS) -DSIMULATION_MODE milestone5.c -o milestone5 $(INCLUDES) $(LDFLAGS)
-
+	$(CC) $(CFLAGS) -DSIMULATION_MODE milestone5.c dijkstra.c \
+	$(RAYLIB) -o milestone5
 
 # =========================
 # Clean

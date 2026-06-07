@@ -7,8 +7,6 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <semaphore.h>
-#include <sys/mman.h>
 #include "raylib.h"
 #include "dijkstra.h"
 

@@ -2,6 +2,7 @@
 #define DIJKSTRA_H
 
 #include <stdbool.h>
+#include <limits.h>
 
 #define MAX_NODES 15
 #define INF INT_MAX

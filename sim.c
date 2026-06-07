@@ -121,11 +121,10 @@ int main(int argc, char* argv[]) {
     }
 
     FILE* file = fopen(argv[1], "r");
-    if (!file) {
-        perror("Error opening input file");
-        fclose(file);
-        return -1;
-    }
+   if (!file) {
+    perror("Error opening input file");
+    return 1;
+}
     int N,M;
     fscanf(file,"%d %d",&N,&M);
 

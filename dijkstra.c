@@ -30,9 +30,15 @@ Graph* createGraph(int numNodes) {
 
 /* ===== Add Edge ===== */
 bool addEdge(Graph *graph, int src, int dest, int weight) {
-    if (!graph || src < 0 || dest < 0) return false;
+    if (!graph) return false;
+
+    if (src < 0 || dest < 0 || weight < 0 ||
+        src >= graph->numNodes || dest >= graph->numNodes) {
+        return false;
+    }
 
     Edge* e = createEdge(dest, weight);
+    if (!e) return false;
 
     if (!graph->adjList[src].head) {
         graph->adjList[src].head = e;
@@ -169,11 +175,29 @@ for (int i = 0; i < M; i++) {
         return 1;
     }
 
-    addEdge(g, u, v, w);
+    if (!addEdge(g, u, v, w)) {
+    printf("Invalid edge values\n");
+    freeGraph(g);
+    fclose(file);
+    return 1;
+}
 }
 
 int startNode, endNode;
-fscanf(file, "%d %d", &startNode, &endNode);
+
+if (fscanf(file, "%d %d", &startNode, &endNode) != 2) {
+    printf("Invalid source/destination format\n");
+    freeGraph(g);
+    fclose(file);
+    return 1;
+}
+
+if (startNode < 0 || endNode < 0 || startNode >= N || endNode >= N) {
+    printf("Invalid source or destination node\n");
+    freeGraph(g);
+    fclose(file);
+    return 1;
+}
 
 fclose(file);
 

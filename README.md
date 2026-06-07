@@ -6,6 +6,7 @@ This project is a comprehensive C-based application that implements graph repres
 * **Jinan Rasas**
 * **Afnan Rabiah**
 * **Mohammad Smoum**
+* **Cleopatra Kajjo**
 
 ---
 
@@ -14,8 +15,25 @@ The project is divided into three main milestones:
 1. **Milestone 1: Algorithmic Foundation** - Implementation of a weighted directed graph and Dijkstra's algorithm to find the shortest path between two nodes.
 2. **Milestone 2: Graphical Representation** - Visualizing the graph nodes and edges in a window using `raylib`.
 3. **Milestone 3: Path Animation** - Animating an entity moving along the calculated shortest path with speed proportional to edge weights.
+4. **Milestone 4: Multiple Processes** - The parent process manages the GUI, creates child processes using fork(), and animates multiple travelers at the same time.
+5. **Milestone 5: IPC** - Each child process calculates its own path and sends updates to the parent process using a pipe.
 
 ---
+
+## Milestone 5 - IPC Explanation
+
+For Milestone 5, we used a pipe as the IPC mechanism.
+
+Each traveler is represented by a child process created using fork().
+Each child process calculates its own shortest path using Dijkstra.
+Whenever the child reaches a node, it sends a message to the parent through the pipe.
+
+The parent process receives the messages, updates the GUI, and prints the log to the terminal.
+
+We chose pipe because the communication is one-way: the children only need to report their progress to the parent.
+
+---
+
 
 ## File Structure
 * `dijkstra.c`: Implementation of the graph data structure and Dijkstra's algorithm.
@@ -57,7 +75,7 @@ Use the provided `Makefile` to compile the project:
 ### 2. Cleaning Up
 To remove all compiled executables and start fresh:
   ```bash
-  clean all
+  make clean 
   ```
 
 ### 3. Running the Programs

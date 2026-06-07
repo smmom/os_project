@@ -23,6 +23,7 @@ typedef struct {
     pid_t pid;
     int arrivedAt;
     int nextNode;
+    bool waiting; 
     bool finished;
 } IPCMessage;
 
@@ -52,6 +53,7 @@ typedef struct Traveler {
     int pathLength;
     Color color;
     bool active;
+    bool waiting;
     Vector2 entityPosition;
 
     // Animation state
@@ -107,7 +109,11 @@ void DrawGraph(Graph* graph) {
                 for (int j = 0; j < travelers[i].pathLength - 1; j++)
                     DrawLineEx(nodePositions[travelers[i].path[j]].position, nodePositions[travelers[i].path[j+1]].position, 4, travelers[i].color);
             }
-            DrawCircleV(travelers[i].entityPosition, ENTITY_RADIUS, travelers[i].color);
+            DrawCircleV(
+               travelers[i].entityPosition,
+               ENTITY_RADIUS,
+               travelers[i].waiting ? RED : travelers[i].color
+);
         }
     }
 
@@ -135,9 +141,14 @@ void StartTravelers(Graph* graph) {
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
                 for (int j = 0; j < len; j++) {
 
-                   sem_wait(&nodeLocks[p[j]]);
+                   if (sem_trywait(&nodeLocks[p[j]]) == -1) {
+                         IPCMessage waitingMsg = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, true, false };
+                         write(pipefd[1], &waitingMsg, sizeof(IPCMessage));
 
-                   IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, (j == len - 1) };
+                         sem_wait(&nodeLocks[p[j]]);
+}
+
+                   IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, false, (j == len - 1) };
                    write(pipefd[1], &m, sizeof(IPCMessage));
 
                    sleep(1);
@@ -156,7 +167,7 @@ void StartTravelers(Graph* graph) {
                     }
                 }
             }
-            IPCMessage f = { getpid(), -1, -1, true };
+            IPCMessage f = { getpid(), -1, -1, false, true };
             write(pipefd[1], &f, sizeof(IPCMessage));
             close(pipefd[1]); 
             exit(0);
@@ -277,7 +288,9 @@ if (travelers[i].startNode < 0 || travelers[i].endNode < 0 ||
     fclose(file);
     return 1;
 }
-        travelers[i].color = colors[i % 10]; travelers[i].active = true;
+        travelers[i].color = colors[i % 10];
+        travelers[i].active = true;
+        travelers[i].waiting = false;
         travelers[i].entityPosition = nodePositions[travelers[i].startNode].position;
         travelers[i].pid = 0; travelers[i].pathLength = 0;
         travelers[i].currentFromNode = travelers[i].startNode;
@@ -299,7 +312,7 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
     return 1;
 }
 
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 5 ");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 6");
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){10, 10, 100, 30})) {
@@ -313,8 +326,15 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
             while (read(pipefd[0], &m, sizeof(IPCMessage)) > 0) {
                 for (int i = 0; i < numTravelers; i++) {
                     if (travelers[i].pid == m.pid) {
+                        if (m.waiting) {
+                           travelers[i].waiting = true;
+                           travelers[i].entityPosition = nodePositions[m.arrivedAt].position;
+                           printf("[PID=%d] waiting outside node %d\n", m.pid, m.arrivedAt);
+                           continue;
+                        }
                         if (m.finished && m.arrivedAt == -1) { travelers[i].active = false; printf("[PID=%d] finished\n", m.pid); }
                         else {
+                            travelers[i].waiting = false;
                             if (m.nextNode == -1) printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
                             else printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);
 

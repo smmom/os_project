@@ -23,5 +23,8 @@ milestone4:
 milestone5:
 	$(CC) $(CFLAGS) -DSIMULATION_MODE milestone5.c dijkstra.c -o sim $(RAYLIB)
 
+milestone6:
+	$(CC) $(CFLAGS) -DSIMULATION_MODE milestone6.c dijkstra.c -o sim $(RAYLIB)
+
 clean:
-	rm -f dijkstra sim milestone4 milestone5 *.o
+	rm -f dijkstra sim *.o

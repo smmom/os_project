@@ -23,7 +23,7 @@ typedef struct {
     pid_t pid;
     int arrivedAt;
     int nextNode;
-    bool waiting; 
+    bool waiting;
     bool finished;
 } IPCMessage;
 
@@ -112,7 +112,7 @@ void DrawGraph(Graph* graph) {
             DrawCircleV(
                travelers[i].entityPosition,
                ENTITY_RADIUS,
-               travelers[i].waiting ? RED : travelers[i].color
+               travelers[i].color
 );
         }
     }
@@ -135,18 +135,19 @@ void StartTravelers(Graph* graph) {
           continue;
 }
 
-       if (pid == 0) { //child process 
+       if (pid == 0) { //child process
             close(pipefd[0]);
             int p[MAX_NODES], len, w;
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
                 for (int j = 0; j < len; j++) {
 
+                   /* Try to enter immediately. Only if the node is occupied do
+                      we announce "waiting outside" and then block. */
                    if (sem_trywait(&nodeLocks[p[j]]) == -1) {
-                         IPCMessage waitingMsg = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, true, false };
-                         write(pipefd[1], &waitingMsg, sizeof(IPCMessage));
-
-                         sem_wait(&nodeLocks[p[j]]);
-}
+                       IPCMessage waitingMsg = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, true, false };
+                       write(pipefd[1], &waitingMsg, sizeof(IPCMessage));
+                       sem_wait(&nodeLocks[p[j]]);  /* block until node is free */
+                   }
 
                    IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, false, (j == len - 1) };
                    write(pipefd[1], &m, sizeof(IPCMessage));
@@ -157,11 +158,11 @@ void StartTravelers(Graph* graph) {
                     if (j < len - 1) {
                         int weight = 0;
                         Edge* e = graph->adjList[p[j]].head;
-                        while (e) { 
-                            if (e->destination == p[j+1]) { 
-                                weight = e->weight; break; 
+                        while (e) {
+                            if (e->destination == p[j+1]) {
+                                weight = e->weight; break;
                             }
-                            e = e->next; 
+                            e = e->next;
                         }
                         usleep(weight * 300000);
                     }
@@ -169,9 +170,9 @@ void StartTravelers(Graph* graph) {
             }
             IPCMessage f = { getpid(), -1, -1, false, true };
             write(pipefd[1], &f, sizeof(IPCMessage));
-            close(pipefd[1]); 
+            close(pipefd[1]);
             exit(0);
-        } else { 
+        } else {
            travelers[i].pid = pid;
        }
     }
@@ -257,7 +258,7 @@ for (int i = 0; i < numEdges; i++) {
         fclose(file);
         return 1;
     }
-}  
+}
     calculateNodePositions(numNodes);
     if (fscanf(file, "%d", &numTravelers) != 1) {
     fprintf(stderr, "Invalid travelers count\n");

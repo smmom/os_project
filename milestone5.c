@@ -126,7 +126,7 @@ void StartTravelers(Graph* graph) {
           continue;
 }
 
-       if (pid == 0) { //child process 
+       if (pid == 0) { //child process
             close(pipefd[0]);
             int p[MAX_NODES], len, w;
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
@@ -136,11 +136,11 @@ void StartTravelers(Graph* graph) {
                     if (j < len - 1) {
                         int weight = 0;
                         Edge* e = graph->adjList[p[j]].head;
-                        while (e) { 
-                            if (e->destination == p[j+1]) { 
-                                weight = e->weight; break; 
+                        while (e) {
+                            if (e->destination == p[j+1]) {
+                                weight = e->weight; break;
                             }
-                            e = e->next; 
+                            e = e->next;
                         }
                         usleep(weight * 300000);
                     }
@@ -148,12 +148,14 @@ void StartTravelers(Graph* graph) {
             }
             IPCMessage f = { getpid(), -1, -1, true };
             write(pipefd[1], &f, sizeof(IPCMessage));
-            close(pipefd[1]); 
+            close(pipefd[1]);
             exit(0);
-        } else { 
+        } else {
            travelers[i].pid = pid;
        }
     }
+    /* Parent closes write-end so it receives EOF when all children exit */
+    close(pipefd[1]);
 }
 
 void PauseTravelers() {
@@ -212,7 +214,7 @@ for (int i = 0; i < numEdges; i++) {
         fclose(file);
         return 1;
     }
-}  
+}
     calculateNodePositions(numNodes);
     if (fscanf(file, "%d", &numTravelers) != 1) {
     fprintf(stderr, "Invalid travelers count\n");
@@ -279,12 +281,28 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
             while (read(pipefd[0], &m, sizeof(IPCMessage)) > 0) {
                 for (int i = 0; i < numTravelers; i++) {
                     if (travelers[i].pid == m.pid) {
-                        if (m.finished && m.arrivedAt == -1) { travelers[i].active = false; printf("[PID=%d] finished\n", m.pid); }
-                        else {
+                        if (m.finished) {
+                            travelers[i].active = false;
+                            printf("[PID=%d] finished\n", m.pid);
+                        } else {
                             if (m.nextNode == -1) printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
                             else printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);
 
-                            if (travelers[i].pathLength == 0) { int dw; dijkstra(graph, travelers[i].startNode, travelers[i].endNode, travelers[i].path, &travelers[i].pathLength, &dw); }
+                            /* Build path incrementally from IPC messages (parent never runs Dijkstra).
+                               Append arrivedAt first, then nextNode immediately — so the line
+                               arrivedAt->nextNode is drawn BEFORE the ball starts moving along it. */
+                            if (travelers[i].pathLength == 0 ||
+                                travelers[i].path[travelers[i].pathLength - 1] != m.arrivedAt) {
+                                if (travelers[i].pathLength < MAX_NODES)
+                                    travelers[i].path[travelers[i].pathLength++] = m.arrivedAt;
+                            }
+                            if (m.nextNode != -1) {
+                                if (travelers[i].pathLength == 0 ||
+                                    travelers[i].path[travelers[i].pathLength - 1] != m.nextNode) {
+                                    if (travelers[i].pathLength < MAX_NODES)
+                                        travelers[i].path[travelers[i].pathLength++] = m.nextNode;
+                                }
+                            }
 
                             // Start smooth move to next node
                             if (m.nextNode != -1) {
@@ -294,6 +312,7 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                                 // Calculate duration based on edge weight
                                 int weight = 0; Edge* e = graph->adjList[m.arrivedAt].head;
                                 while (e) { if (e->destination == m.nextNode) { weight = e->weight; break; } e = e->next; }
+                                if (weight <= 0) weight = 1; // Guard against division by zero
                                 travelers[i].moveDuration = weight * 0.3f; // Same as usleep factor
                             } else {
                                 travelers[i].entityPosition = nodePositions[m.arrivedAt].position;

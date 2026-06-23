@@ -1,8 +1,9 @@
 # Graph Simulation and Pathfinding Project
 
-This project is a comprehensive C-based application that implements graph representation, Dijkstra's shortest path algorithm, graphical visualization with animation using the raylib library, multiple processes, inter-process communication, and synchronization.
+This project is a comprehensive C-based application that implements graph representation, Dijkstra's shortest path algorithm, graphical visualization with animation using the raylib library, multiple processes, inter-process communication, synchronization, and scheduling algorithms.
 
 ## Authors
+
 * **Jinan Rasas**
 * **Afnan Rabiah**
 * **Mohammad Smoum**
@@ -10,129 +11,281 @@ This project is a comprehensive C-based application that implements graph repres
 
 ---
 
-## Project Overview
-The project is divided into six main milestones:
+# Project Overview
+
+The project is divided into seven main milestones:
+
 1. **Milestone 1: Algorithmic Foundation** - Implementation of a weighted directed graph and Dijkstra's algorithm to find the shortest path between two nodes.
-2. **Milestone 2: Graphical Representation** - Visualizing the graph nodes and edges in a window using `raylib`.
+2. **Milestone 2: Graphical Representation** - Visualizing the graph nodes and edges in a window using raylib.
 3. **Milestone 3: Path Animation** - Animating an entity moving along the calculated shortest path with speed proportional to edge weights.
-4. **Milestone 4: Multiple Processes** - The parent process manages the GUI, creates child processes using fork(), and animates multiple travelers at the same time.
+4. **Milestone 4: Multiple Processes** - The parent process manages the GUI, creates child processes using fork(), and animates multiple travelers simultaneously.
 5. **Milestone 5: IPC** - Each child process calculates its own path and sends updates to the parent process using a pipe.
-6. **Milestone 6: Synchronization** - Each graph node is protected by a semaphore so that only one traveler can stay inside a node at a time.
+6. **Milestone 6: Synchronization** - Graph nodes are protected using semaphores to ensure mutual exclusion.
+7. **Milestone 7: Scheduling Algorithms** - FCFS and SJF scheduling policies determine which traveler may enter a node when multiple travelers are waiting.
 
 ---
 
-## Milestone 5 - IPC Explanation
+# Milestone 5 - IPC Explanation
 
 For Milestone 5, we used a pipe as the IPC mechanism.
 
 Each traveler is represented by a child process created using fork().
-Each child process calculates its own shortest path using Dijkstra.
+
+Each child process calculates its own shortest path using Dijkstra's algorithm.
+
 Whenever the child reaches a node, it sends a message to the parent through the pipe.
 
-The parent process receives the messages, updates the GUI, and prints the log to the terminal.
+The parent process receives the messages, updates the GUI, and prints status information.
 
-We chose pipe because the communication is one-way: the children only need to report their progress to the parent.
-
----
-
-## Milestone 6 - Synchronization Explanation
-
-For Milestone 6, we used POSIX semaphores as the synchronization mechanism.
-
-Each node in the graph has its own semaphore. The semaphores are stored in shared memory using mmap(), so all child processes can access the same locks.
-
-Before a traveler enters a node, it tries to acquire the semaphore of that node using sem_trywait(). If the node is already occupied, the traveler sends a waiting message to the parent process and then waits using sem_wait() until the node becomes free.
-
-When a traveler enters a node, it stays there for one full second using sleep(1). After that, it releases the node using sem_post(), allowing another waiting traveler to enter.
-
-The GUI displays waiting travelers in a different color, so it is clear when a traveler is waiting outside a node.
-
-We chose semaphores because they provide mutual exclusion and ensure that no more than one traveler can be inside the same node at the same time.
+We chose pipes because communication is primarily one-way: travelers report their progress to the parent process.
 
 ---
 
+# Milestone 6 - Synchronization Explanation
 
-## File Structure
-* `dijkstra.c`: Implementation of the graph data structure and Dijkstra's algorithm.
-* `dijkstra.h`: Header file for the graph and Dijkstra functions.
-* `sim.c`: Main simulation file containing the GUI logic, graph visualization, and path animation.
-* `milestone4.c`: Implementation of multiple travelers using child processes.
-* `milestone5.c`: Implementation of IPC using pipes.
-* `milestone6.c`: Implementation of synchronization using semaphores.
-* `Makefile`: Build script to compile the project milestones.
-* `input.txt`: Sample input file containing graph data (nodes, edges, and query).
+For Milestone 6, we used POSIX semaphores to synchronize access to graph nodes.
+
+Each node is protected by a semaphore, ensuring that only one traveler may occupy a node at any given time.
+
+Before entering a node, a traveler attempts to acquire the node semaphore. If the node is occupied, the traveler must wait until the semaphore becomes available.
+
+After occupying a node for one second, the traveler releases the semaphore and allows another waiting traveler to enter.
+
+The GUI clearly displays waiting travelers, making synchronization behavior visible during execution.
+
+We chose semaphores because they provide efficient mutual exclusion and prevent collisions between travelers.
 
 ---
 
-## Prerequisites
-To run the graphical simulation, you need to have `raylib` installed on your system.
+# Milestone 7 - Scheduling Algorithms
 
-### macOS (M1/M2/M3/M4)
-Install via Homebrew:
+## Overview
+
+Milestone 7 extends the synchronization mechanism by replacing random node access ordering with scheduling algorithms.
+
+When multiple travelers request entry to the same node, the parent process acts as a scheduler and decides which traveler is allowed to enter next.
+
+Two scheduling algorithms are implemented:
+
+### FCFS (First Come First Served)
+
+Travelers are served according to their arrival order.
+
+Example:
+
+Traveler A arrives first
+
+Traveler B arrives second
+
+Traveler C arrives third
+
+Entry order:
+
+A → B → C
+
+### SJF (Shortest Job First)
+
+Travelers are selected according to the shortest upcoming path segment weight.
+
+If two travelers have equal segment weights, arrival time is used as a tie-breaker.
+
+This algorithm may reduce average waiting times compared to FCFS.
+
+## Implementation Details
+
+The parent process maintains a separate waiting queue for each graph node.
+
+When a traveler requests entry:
+
+1. The traveler sends a request message to the parent.
+2. If the node is free, access is granted immediately.
+3. If the node is occupied, the traveler is inserted into the node's waiting queue.
+4. When the current traveler leaves, the parent selects the next traveler according to the active scheduling algorithm.
+5. The selected traveler receives permission to enter the node.
+
+The scheduling algorithm is selected at runtime using command-line arguments.
+
+## Scheduling Commands
+
+Run with FCFS:
+
+```bash
+./sim -schd fcfs input.txt
+```
+
+Run with SJF:
+
+```bash
+./sim -schd sjf input.txt
+```
+
+## GUI Support
+
+The GUI displays the currently active scheduling algorithm during execution.
+
+## Comparison Between Algorithms
+
+### FCFS
+
+Advantages:
+
+* Fair and predictable.
+* Preserves arrival order.
+* Prevents starvation.
+
+Disadvantages:
+
+* Can lead to longer average waiting times.
+
+### SJF
+
+Advantages:
+
+* Often reduces average waiting time.
+* Improves throughput when short jobs are present.
+
+Disadvantages:
+
+* Less fair than FCFS.
+* Long jobs may experience longer waits.
+
+In our experiments, SJF generally reduced waiting times when several travelers competed for the same node, while FCFS preserved strict arrival order.
+
+---
+
+# File Structure
+
+* `dijkstra.c` - Graph implementation and Dijkstra's shortest path algorithm.
+* `dijkstra.h` - Header file for graph and Dijkstra functionality.
+* `sim.c` - Main simulation program.
+* `milestone4.c` - Multiple traveler implementation using fork().
+* `milestone5.c` - IPC implementation using pipes.
+* `milestone6.c` - Synchronization implementation using semaphores.
+* `milestone7.c` - Scheduling implementation using FCFS and SJF algorithms.
+* `Makefile` - Build script for all milestones.
+* `input.txt` - Sample graph input file.
+
+---
+
+# Prerequisites
+
+To run the graphical simulation, raylib must be installed.
+
+## macOS
+
 ```bash
 brew install raylib
 ```
 
-### Linux (Ubuntu/Debian)
+## Ubuntu / Debian
+
 ```bash
 sudo apt install libraylib-dev
 ```
 
 ---
 
-## How to Build and Run
+# How to Build and Run
 
-### 1. Compilation
-Use the provided `Makefile` to compile the project:
+## Compilation
 
-* **To compile Milestone 1 (Dijkstra CLI):**
-  ```bash
-  make milestone1
-  ```
-* **To compile Milestone 2 & 3 (GUI Simulation):**
-  ```bash
-  make milestone2
-  ```
-* **To compile Milestone 4:**
-  ```bash
-  make milestone4
-  ```
-* **To compile Milestone 5:**
-  ```bash
-  make milestone5
-  ```
-* **To compile Milestone 6:**
-  ```bash
-  make milestone6
-  ```
-### 2. Cleaning Up
-To remove all compiled executables and start fresh:
-  ```bash
-  make clean 
-  ```
+Compile Milestone 1:
 
-### 3. Running the Programs
-Both programs require an input file as a command-line argument.
+```bash
+make milestone1
+```
 
-* **Run Dijkstra CLI:**
-  ```bash
-  ./dijkstra input.txt
-  ```
-* **Run GUI Simulation:**
-  ```bash
-  ./sim input.txt
-  ```
+Compile Milestone 2:
+
+```bash
+make milestone2
+```
+
+Compile Milestone 3:
+
+```bash
+make milestone3
+```
+
+Compile Milestone 4:
+
+```bash
+make milestone4
+```
+
+Compile Milestone 5:
+
+```bash
+make milestone5
+```
+
+Compile Milestone 6:
+
+```bash
+make milestone6
+```
+
+Compile Milestone 7:
+
+```bash
+make milestone7
+```
 
 ---
 
-## Input File Format
-## Milestone 1 Input Format
-The input file should follow this structure:
-1. First line: `N M` (Number of nodes and number of edges).
-2. Next `M` lines: `src dst weight` (Edge definition).
-3. Last line: `start end` (Shortest path query).
+## Cleaning
 
-Example `input.txt`:
+```bash
+make clean
+```
+
+---
+
+## Running the Programs
+
+### Milestone 1
+
+```bash
+./dijkstra input.txt
+```
+
+### Milestones 2–6
+
+```bash
+./sim input.txt
+```
+
+### Milestone 7
+
+FCFS:
+
+```bash
+./sim -schd fcfs input.txt
+```
+
+SJF:
+
+```bash
+./sim -schd sjf input.txt
+```
+
+---
+
+# Input File Format
+
+## Milestone 1
+
+Input format:
+
+```text
+N M
+src dst weight
+...
+start end
+```
+
+Example:
+
 ```text
 6 8
 0 1 4
@@ -146,17 +299,31 @@ Example `input.txt`:
 0 5
 ```
 
-## Milestones 4-6 Input Format
-The input file should follow this structure:
+---
 
-First line: `N M` (number of nodes and number of edges).
-Next `M` lines: `src dst weight` (edge definition).
-Next line: number of travelers.
-Next lines: `source destination` for each traveler.
+## Milestones 4–7
 
-Example `input.txt`:
+Input format:
+
 ```text
+N M
+src dst weight
+...
+T
+source destination
+source destination
+...
+```
 
+Where:
+
+* N = Number of nodes
+* M = Number of edges
+* T = Number of travelers
+
+Example:
+
+```text
 10 15
 0 1 2
 1 2 3
@@ -176,16 +343,39 @@ Example `input.txt`:
 2
 0 9
 4 8
+```
 
 ---
 
-## Features
-* **Dynamic Node Positioning:** Nodes are automatically distributed in a circular layout for clarity.
-* **Interactive GUI:** Includes a "PLAY/PAUSE" button to control the animation.
-* **Realistic Animation:** Travelers move according to edge weights.
-* **Multiple Processes:** Each traveler is represented by a child process created using fork().
-* **IPC:** Child processes communicate their progress to the parent process through a pipe.
-* **Synchronization:** Each node is protected by a semaphore to prevent more than one traveler from occupying it at the same time.
-* **Waiting Visualization:** Travelers waiting outside occupied nodes are displayed in a different color.
-* **Terminal Logs:** The parent process prints traveler arrivals, waiting states, and finish events.
-* **Visual Feedback:** The shortest path is highlighted in blue, and arrival is confirmed with a message.
+# Features
+
+* Weighted directed graph implementation.
+* Dijkstra shortest-path algorithm.
+* Dynamic node positioning.
+* Interactive graphical interface.
+* Animated traveler movement.
+* Multiple concurrent processes using fork().
+* Inter-process communication using pipes.
+* Synchronization using POSIX semaphores.
+* Waiting queue management.
+* FCFS scheduling algorithm.
+* SJF scheduling algorithm.
+* Runtime scheduler selection.
+* Visual display of active scheduling policy.
+* Traveler waiting-state visualization.
+* Terminal event logging.
+* Path highlighting and movement animation.
+
+---
+
+# Final Submission
+
+The final submission contains all seven milestones.
+
+The repository includes:
+
+* Source code for all milestones.
+* Working Makefile with milestone targets.
+* This README file.
+* Sample input files.
+* Demonstration video showing FCFS and SJF executions on the same graph and comparing their behavior.

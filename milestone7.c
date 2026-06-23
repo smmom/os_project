@@ -44,11 +44,11 @@ typedef enum {
 typedef struct {
     MsgType   type;
     pid_t     pid;
-    int       traveler_idx;       
-    int       node;               
-    int       next_node;          
-    long long arrival_time_ms;    
-    int       next_seg_weight;    
+    int       traveler_idx;
+    int       node;
+    int       next_node;
+    long long arrival_time_ms;
+    int       next_seg_weight;
 } IPCMessage;
 
 /* ─── waiting queue entry ────────────────────────────────────────── */
@@ -61,17 +61,17 @@ typedef struct WaitingEntry {
 
 /* ─── per-node queue ─────────────────────────────────────────────── */
 typedef struct {
-    WaitingEntry *head;           
+    WaitingEntry *head;
 } NodeQueue;
 
-static NodeQueue *node_queues = NULL;   
+static NodeQueue *node_queues = NULL;
 static int       *node_occupants = NULL; /* Tracks strictly who is inside */
 static int        total_nodes = 0;
 
 /* Semaphores */
-static sem_t **node_sems     = NULL;   
-static sem_t **enter_sems    = NULL;   
-static sem_t **continue_sems = NULL;   
+static sem_t **node_sems     = NULL;
+static sem_t **enter_sems    = NULL;
+static sem_t **continue_sems = NULL;
 static int     num_travelers_global = 0;
 
 /* Pipe */
@@ -101,11 +101,11 @@ typedef struct {
     int     pathLength;
     Color   color;
     bool    active;
-    bool    waiting;           
+    bool    waiting;
     Vector2 entityPosition;
     int     fromNode, toNode;
-    float   moveProgress;      
-    float   moveDuration;      
+    float   moveProgress;
+    float   moveDuration;
 } Traveler;
 
 static Traveler travelers[MAX_TRAVELERS];
@@ -198,8 +198,8 @@ static void sems_create(int n_nodes, int n_travelers) {
         sem_unlink(ename); sem_unlink(cname);
         enter_sems[i] = sem_open(ename, O_CREAT|O_EXCL, 0644, 0);
         continue_sems[i] = sem_open(cname, O_CREAT|O_EXCL, 0644, 0);
-        if (enter_sems[i] == SEM_FAILED || continue_sems[i] == SEM_FAILED) { 
-            perror("sem_open traveler"); exit(1); 
+        if (enter_sems[i] == SEM_FAILED || continue_sems[i] == SEM_FAILED) {
+            perror("sem_open traveler"); exit(1);
         }
     }
 }
@@ -230,7 +230,7 @@ static long long now_ms(void) {
  * Child process – walk path with parent-controlled scheduling
  * ═══════════════════════════════════════════════════════════════════ */
 static void run_child(Graph *graph, int tidx) {
-    close(pipefd[0]);   
+    close(pipefd[0]);
 
     char esem_name[64], csem_name[64];
     sprintf(esem_name, ENTER_SEM_FMT, tidx);
@@ -251,7 +251,7 @@ static void run_child(Graph *graph, int tidx) {
         int cur_node  = p[j];
         int nxt_node  = (j < len-1) ? p[j+1] : -1;
         int seg_w = 0;
-        
+
         if (nxt_node != -1) {
             for (Edge *e = graph->adjList[cur_node].head; e; e = e->next)
                 if (e->destination == nxt_node) { seg_w = e->weight; break; }
@@ -260,7 +260,7 @@ static void run_child(Graph *graph, int tidx) {
         char nsem_name[64];
         sprintf(nsem_name, NODE_SEM_FMT, cur_node);
         sem_t *nsem = sem_open(nsem_name, 0);
-        
+
         /* 1. Request entry from the strict parent monitor */
         IPCMessage req = {MSG_REQUEST, getpid(), tidx, cur_node, nxt_node, now_ms(), seg_w};
         safe_write(pipefd[1], &req, sizeof(req));
@@ -309,6 +309,10 @@ static void StartTravelers(Graph *graph) {
         if (pid == 0)      { run_child(graph, i); }
         travelers[i].pid = pid;
     }
+    /* Close the write end in the parent so that when all children exit,
+     * read() on pipefd[0] returns 0 (EOF) instead of blocking forever. */
+    close(pipefd[1]);
+    pipefd[1] = -1;
 }
 
 static void PauseTravelers(void) {
@@ -472,7 +476,7 @@ int main(int argc, char *argv[]) {
 
     total_nodes = numNodes;
     node_queues = calloc(total_nodes, sizeof(NodeQueue));
-    
+
     /* Strict Parent State Tracker */
     node_occupants = calloc(total_nodes, sizeof(int));
     for (int i = 0; i < total_nodes; i++) node_occupants[i] = -1;
@@ -493,7 +497,7 @@ int main(int argc, char *argv[]) {
             IPCMessage m; ssize_t br;
             /* Ensures atomicity by enforcing full struct read */
             while ((br = read(pipefd[0], &m, sizeof(m))) > 0) {
-                if (br != sizeof(m)) continue; 
+                if (br != sizeof(m)) continue;
                 int ti = m.traveler_idx;
                 if (ti < 0 || ti >= numTravelers) continue;
 
@@ -501,7 +505,7 @@ int main(int argc, char *argv[]) {
                 case MSG_REQUEST:
                     travelers[ti].waiting = true;
                     travelers[ti].entityPosition = nodePositions[m.node].position;
-                    
+
                     /* The Parent acts as the strict monitor / arbiter */
                     if (node_occupants[m.node] == -1) {
                         /* Node free, grant access immediately */
@@ -563,6 +567,7 @@ int main(int argc, char *argv[]) {
 
     KillAllTravelers();
     close(pipefd[0]);
+    if (pipefd[1] != -1) close(pipefd[1]);  /* guard: may already be closed in StartTravelers */
     free(node_occupants);
     sems_destroy(total_nodes, numTravelers);
     queues_free(); freeGraph(graph); CloseWindow();

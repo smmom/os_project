@@ -21,8 +21,10 @@ typedef struct {
     pid_t pid;
     int arrivedAt;
     int nextNode;
-    // first change from finished to no path
+    // first change to add bool noPath
     bool noPath;
+    bool finished;
+
 } IPCMessage;
 
 // Manual Vector2 Helper Functions

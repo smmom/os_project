@@ -346,7 +346,7 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                         nodePositions[travelers[i].currentToNode].position,
                         travelers[i].moveProgress
                     );
-                }
+                } 
             }
         }
         BeginDrawing(); ClearBackground(RAYWHITE); DrawGraph(graph); EndDrawing();

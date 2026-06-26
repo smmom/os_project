@@ -21,7 +21,8 @@ typedef struct {
     pid_t pid;
     int arrivedAt;
     int nextNode;
-    bool finished;
+    // first change from finished to no path
+    bool noPath;
 } IPCMessage;
 
 // Manual Vector2 Helper Functions
@@ -131,7 +132,7 @@ void StartTravelers(Graph* graph) {
             int p[MAX_NODES], len, w;
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
                 for (int j = 0; j < len; j++) {
-                    IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, (j == len - 1) };
+                    IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, (j == len - 1), false }; //change4 adding the false
                     write(pipefd[1], &m, sizeof(IPCMessage));
                     if (j < len - 1) {
                         int weight = 0;
@@ -146,7 +147,12 @@ void StartTravelers(Graph* graph) {
                     }
                 }
             }
-            IPCMessage f = { getpid(), -1, -1, true };
+           //second change 
+           else {
+           IPCMessage np = { getpid(), -1, -1, false, true };
+           write(pipefd[1], &np, sizeof(IPCMessage));
+       }
+            IPCMessage f = { getpid(), -1, -1, true, false }; //adding the false
             write(pipefd[1], &f, sizeof(IPCMessage));
             close(pipefd[1]);
             exit(0);
@@ -281,7 +287,11 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
             while (read(pipefd[0], &m, sizeof(IPCMessage)) > 0) {
                 for (int i = 0; i < numTravelers; i++) {
                     if (travelers[i].pid == m.pid) {
-                        if (m.finished) {
+                        //third change from m.finished to m.noPath
+                        if (m.noPath) {
+                            printf("[PID=%d] no path found\n", m.pid);
+                            travelers[i].active = false;
+                        } else if (m.finished) {
                             travelers[i].active = false;
                             printf("[PID=%d] finished\n", m.pid);
                         } else {

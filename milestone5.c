@@ -17,7 +17,14 @@
 #define ENTITY_RADIUS 10
 #define MAX_TRAVELERS 10
 
+typedef enum {
+    MSG_NORMAL,
+    MSG_FINISHED,
+    MSG_NO_PATH
+} MessageType;
+
 typedef struct {
+    MessageType type;
     pid_t pid;
     int arrivedAt;
     int nextNode;
@@ -121,40 +128,72 @@ void StartTravelers(Graph* graph) {
     for (int i = 0; i < numTravelers; i++) {
         pid_t pid = fork();
 
-       if (pid < 0) {
-          perror("fork");
-          continue;
-}
+        if (pid < 0) {
+            perror("fork");
+            continue;
+        }
 
-       if (pid == 0) { //child process
+        if (pid == 0) { // child process
             close(pipefd[0]);
+
             int p[MAX_NODES], len, w;
+
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
                 for (int j = 0; j < len; j++) {
-                    IPCMessage m = { getpid(), p[j], (j < len - 1) ? p[j+1] : -1, (j == len - 1) };
+                    IPCMessage m = {
+                        MSG_NORMAL,
+                        getpid(),
+                        p[j],
+                        (j < len - 1) ? p[j + 1] : -1,
+                        false
+                    };
+
                     write(pipefd[1], &m, sizeof(IPCMessage));
+
                     if (j < len - 1) {
                         int weight = 0;
                         Edge* e = graph->adjList[p[j]].head;
+
                         while (e) {
-                            if (e->destination == p[j+1]) {
-                                weight = e->weight; break;
+                            if (e->destination == p[j + 1]) {
+                                weight = e->weight;
+                                break;
                             }
                             e = e->next;
                         }
+
                         usleep(weight * 300000);
                     }
                 }
+            } else {
+                IPCMessage noPathMsg = {
+                    MSG_NO_PATH,
+                    getpid(),
+                    travelers[i].startNode,
+                    travelers[i].endNode,
+                    false
+                };
+
+                write(pipefd[1], &noPathMsg, sizeof(IPCMessage));
             }
-            IPCMessage f = { getpid(), -1, -1, true };
+
+            IPCMessage f = {
+                MSG_FINISHED,
+                getpid(),
+                -1,
+                -1,
+                true
+            };
+
             write(pipefd[1], &f, sizeof(IPCMessage));
             close(pipefd[1]);
             exit(0);
+
         } else {
-           travelers[i].pid = pid;
-       }
+            travelers[i].pid = pid;
+        }
     }
-    /* Parent closes write-end so it receives EOF when all children exit */
+
     close(pipefd[1]);
 }
 
@@ -281,9 +320,25 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
             while (read(pipefd[0], &m, sizeof(IPCMessage)) > 0) {
                 for (int i = 0; i < numTravelers; i++) {
                     if (travelers[i].pid == m.pid) {
-                        if (m.finished) {
+
+                        if (m.type == MSG_NO_PATH) {
+
                             travelers[i].active = false;
+
+                            printf("[PID=%d] NO PATH from node %d to node %d\n",
+                                   m.pid,
+                                   m.arrivedAt,
+                                   m.nextNode);
+
+                            continue;
+                        }
+
+                        if (m.type == MSG_FINISHED || m.finished) {
+
+                            travelers[i].active = false;
+
                             printf("[PID=%d] finished\n", m.pid);
+
                         } else {
                             if (m.nextNode == -1) printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
                             else printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);

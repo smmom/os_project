@@ -124,7 +124,7 @@ void StartTravelers(Graph* graph) {
        if (pid < 0) {
           perror("fork");
           continue;
-}
+       }
 
        if (pid == 0) { //child process
             close(pipefd[0]);
@@ -145,7 +145,12 @@ void StartTravelers(Graph* graph) {
                         usleep(weight * 300000);
                     }
                 }
+            } else {
+                // TASK C: No route found! Send special message
+                IPCMessage no_route_msg = { getpid(), -2, -2, false }; 
+                write(pipefd[1], &no_route_msg, sizeof(IPCMessage));
             }
+            
             IPCMessage f = { getpid(), -1, -1, true };
             write(pipefd[1], &f, sizeof(IPCMessage));
             close(pipefd[1]);
@@ -180,71 +185,71 @@ void KillAllTravelers() {
 int main(int argc, char* argv[]) {
     if (argc < 2) { fprintf(stderr, "Usage: %s <input_file>\n", argv[0]); return 1; }
     FILE* file = fopen(argv[1], "r");
-if (!file) {
-    perror("Error opening input file");
-    return 1;
-}
+    if (!file) {
+        perror("Error opening input file");
+        return 1;
+    }
 
-int numNodes, numEdges;
-if (fscanf(file, "%d %d", &numNodes, &numEdges) != 2) {
-    fprintf(stderr, "Invalid graph format\n");
-    fclose(file);
-    return 1;
-}
+    int numNodes, numEdges;
+    if (fscanf(file, "%d %d", &numNodes, &numEdges) != 2) {
+        fprintf(stderr, "Invalid graph format\n");
+        fclose(file);
+        return 1;
+    }
 
-if (numNodes <= 0 || numNodes > MAX_NODES) {
-    fprintf(stderr, "Invalid number of nodes\n");
-    fclose(file);
-    return 1;
-}
+    if (numNodes <= 0 || numNodes > MAX_NODES) {
+        fprintf(stderr, "Invalid number of nodes\n");
+        fclose(file);
+        return 1;
+    }
     Graph* graph = createGraph(numNodes);
-for (int i = 0; i < numEdges; i++) {
-    int u, v, w;
+    for (int i = 0; i < numEdges; i++) {
+        int u, v, w;
 
-    if (fscanf(file, "%d %d %d", &u, &v, &w) != 3) {
-        fprintf(stderr, "Invalid edge format\n");
-        freeGraph(graph);
-        fclose(file);
-        return 1;
-    }
+        if (fscanf(file, "%d %d %d", &u, &v, &w) != 3) {
+            fprintf(stderr, "Invalid edge format\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
 
-    if (!addEdge(graph, u, v, w)) {
-        fprintf(stderr, "Invalid edge values\n");
-        freeGraph(graph);
-        fclose(file);
-        return 1;
+        if (!addEdge(graph, u, v, w)) {
+            fprintf(stderr, "Invalid edge values\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
     }
-}
     calculateNodePositions(numNodes);
     if (fscanf(file, "%d", &numTravelers) != 1) {
-    fprintf(stderr, "Invalid travelers count\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
+        fprintf(stderr, "Invalid travelers count\n");
+        freeGraph(graph);
+        fclose(file);
+        return 1;
+    }
 
-if (numTravelers < 0 || numTravelers > MAX_TRAVELERS) {
-    fprintf(stderr, "Invalid number of travelers\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
+    if (numTravelers < 0 || numTravelers > MAX_TRAVELERS) {
+        fprintf(stderr, "Invalid number of travelers\n");
+        freeGraph(graph);
+        fclose(file);
+        return 1;
+    }
     Color colors[] = {BLUE, GREEN, YELLOW, MAGENTA, ORANGE, LIME, SKYBLUE, VIOLET, BEIGE, BROWN};
     for (int i = 0; i < numTravelers; i++) {
         if (fscanf(file, "%d %d", &travelers[i].startNode, &travelers[i].endNode) != 2) {
-    fprintf(stderr, "Invalid traveler format\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
+            fprintf(stderr, "Invalid traveler format\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
 
-if (travelers[i].startNode < 0 || travelers[i].endNode < 0 ||
-    travelers[i].startNode >= numNodes || travelers[i].endNode >= numNodes) {
-    fprintf(stderr, "Invalid traveler source or destination\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
+        if (travelers[i].startNode < 0 || travelers[i].endNode < 0 ||
+            travelers[i].startNode >= numNodes || travelers[i].endNode >= numNodes) {
+            fprintf(stderr, "Invalid traveler source or destination\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
         travelers[i].color = colors[i % 10]; travelers[i].active = true;
         travelers[i].entityPosition = nodePositions[travelers[i].startNode].position;
         travelers[i].pid = 0; travelers[i].pathLength = 0;
@@ -254,18 +259,18 @@ if (travelers[i].startNode < 0 || travelers[i].endNode < 0 ||
     }
     fclose(file);
     if (pipe(pipefd) == -1) {
-    perror("pipe");
-    freeGraph(graph);
-    return 1;
-}
+        perror("pipe");
+        freeGraph(graph);
+        return 1;
+    }
 
-if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
-    perror("fcntl");
-    close(pipefd[0]);
-    close(pipefd[1]);
-    freeGraph(graph);
-    return 1;
-}
+    if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
+        perror("fcntl");
+        close(pipefd[0]);
+        close(pipefd[1]);
+        freeGraph(graph);
+        return 1;
+    }
 
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 5 ");
     SetTargetFPS(60);
@@ -284,6 +289,9 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                         if (m.finished) {
                             travelers[i].active = false;
                             printf("[PID=%d] finished\n", m.pid);
+                        } else if (m.arrivedAt == -2 && m.nextNode == -2) {
+                            // TASK C: Handle the special message for no route
+                            printf("Special Alert: Process %d could not find a route to its destination!\n", m.pid);
                         } else {
                             if (m.nextNode == -1) printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
                             else printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);
@@ -322,19 +330,19 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                     }
                 }
             }
+        }
 
-            // Update smooth positions
-            float dt = GetFrameTime();
-            for (int i = 0; i < numTravelers; i++) {
-                if (travelers[i].active && travelers[i].moveProgress < 1.0f) {
-                    travelers[i].moveProgress += dt / travelers[i].moveDuration;
-                    if (travelers[i].moveProgress > 1.0f) travelers[i].moveProgress = 1.0f;
-                    travelers[i].entityPosition = MyVector2Lerp(
-                        nodePositions[travelers[i].currentFromNode].position,
-                        nodePositions[travelers[i].currentToNode].position,
-                        travelers[i].moveProgress
-                    );
-                }
+        // Update smooth positions
+        float dt = GetFrameTime();
+        for (int i = 0; i < numTravelers; i++) {
+            if (travelers[i].active && travelers[i].moveProgress < 1.0f) {
+                travelers[i].moveProgress += dt / travelers[i].moveDuration;
+                if (travelers[i].moveProgress > 1.0f) travelers[i].moveProgress = 1.0f;
+                travelers[i].entityPosition = MyVector2Lerp(
+                    nodePositions[travelers[i].currentFromNode].position,
+                    nodePositions[travelers[i].currentToNode].position,
+                    travelers[i].moveProgress
+                );
             }
         }
         BeginDrawing(); ClearBackground(RAYWHITE); DrawGraph(graph); EndDrawing();

@@ -121,12 +121,12 @@ void StartTravelers(Graph* graph) {
     for (int i = 0; i < numTravelers; i++) {
         pid_t pid = fork();
 
-       if (pid < 0) {
-          perror("fork");
-          continue;
-}
+        if (pid < 0) {
+            perror("fork");
+            continue;
+        }
 
-       if (pid == 0) { //child process
+        if (pid == 0) { // child process
             close(pipefd[0]);
             int p[MAX_NODES], len, w;
             if (dijkstra(graph, travelers[i].startNode, travelers[i].endNode, p, &len, &w)) {
@@ -145,14 +145,18 @@ void StartTravelers(Graph* graph) {
                         usleep(weight * 300000);
                     }
                 }
+            } else {
+                // *** CHANGE 1: No path found – send special message to parent ***
+                IPCMessage noPath = { getpid(), -2, -1, true };
+                write(pipefd[1], &noPath, sizeof(IPCMessage));
             }
             IPCMessage f = { getpid(), -1, -1, true };
             write(pipefd[1], &f, sizeof(IPCMessage));
             close(pipefd[1]);
             exit(0);
         } else {
-           travelers[i].pid = pid;
-       }
+            travelers[i].pid = pid;
+        }
     }
     /* Parent closes write-end so it receives EOF when all children exit */
     close(pipefd[1]);
@@ -180,95 +184,100 @@ void KillAllTravelers() {
 int main(int argc, char* argv[]) {
     if (argc < 2) { fprintf(stderr, "Usage: %s <input_file>\n", argv[0]); return 1; }
     FILE* file = fopen(argv[1], "r");
-if (!file) {
-    perror("Error opening input file");
-    return 1;
-}
+    if (!file) {
+        perror("Error opening input file");
+        return 1;
+    }
 
-int numNodes, numEdges;
-if (fscanf(file, "%d %d", &numNodes, &numEdges) != 2) {
-    fprintf(stderr, "Invalid graph format\n");
-    fclose(file);
-    return 1;
-}
+    int numNodes, numEdges;
+    if (fscanf(file, "%d %d", &numNodes, &numEdges) != 2) {
+        fprintf(stderr, "Invalid graph format\n");
+        fclose(file);
+        return 1;
+    }
 
-if (numNodes <= 0 || numNodes > MAX_NODES) {
-    fprintf(stderr, "Invalid number of nodes\n");
-    fclose(file);
-    return 1;
-}
+    if (numNodes <= 0 || numNodes > MAX_NODES) {
+        fprintf(stderr, "Invalid number of nodes\n");
+        fclose(file);
+        return 1;
+    }
+
     Graph* graph = createGraph(numNodes);
-for (int i = 0; i < numEdges; i++) {
-    int u, v, w;
-
-    if (fscanf(file, "%d %d %d", &u, &v, &w) != 3) {
-        fprintf(stderr, "Invalid edge format\n");
-        freeGraph(graph);
-        fclose(file);
-        return 1;
+    for (int i = 0; i < numEdges; i++) {
+        int u, v, w;
+        if (fscanf(file, "%d %d %d", &u, &v, &w) != 3) {
+            fprintf(stderr, "Invalid edge format\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
+        if (!addEdge(graph, u, v, w)) {
+            fprintf(stderr, "Invalid edge values\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
     }
 
-    if (!addEdge(graph, u, v, w)) {
-        fprintf(stderr, "Invalid edge values\n");
-        freeGraph(graph);
-        fclose(file);
-        return 1;
-    }
-}
     calculateNodePositions(numNodes);
-    if (fscanf(file, "%d", &numTravelers) != 1) {
-    fprintf(stderr, "Invalid travelers count\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
 
-if (numTravelers < 0 || numTravelers > MAX_TRAVELERS) {
-    fprintf(stderr, "Invalid number of travelers\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
+    if (fscanf(file, "%d", &numTravelers) != 1) {
+        fprintf(stderr, "Invalid travelers count\n");
+        freeGraph(graph);
+        fclose(file);
+        return 1;
+    }
+
+    if (numTravelers < 0 || numTravelers > MAX_TRAVELERS) {
+        fprintf(stderr, "Invalid number of travelers\n");
+        freeGraph(graph);
+        fclose(file);
+        return 1;
+    }
+
     Color colors[] = {BLUE, GREEN, YELLOW, MAGENTA, ORANGE, LIME, SKYBLUE, VIOLET, BEIGE, BROWN};
     for (int i = 0; i < numTravelers; i++) {
         if (fscanf(file, "%d %d", &travelers[i].startNode, &travelers[i].endNode) != 2) {
-    fprintf(stderr, "Invalid traveler format\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
-
-if (travelers[i].startNode < 0 || travelers[i].endNode < 0 ||
-    travelers[i].startNode >= numNodes || travelers[i].endNode >= numNodes) {
-    fprintf(stderr, "Invalid traveler source or destination\n");
-    freeGraph(graph);
-    fclose(file);
-    return 1;
-}
-        travelers[i].color = colors[i % 10]; travelers[i].active = true;
+            fprintf(stderr, "Invalid traveler format\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
+        if (travelers[i].startNode < 0 || travelers[i].endNode < 0 ||
+            travelers[i].startNode >= numNodes || travelers[i].endNode >= numNodes) {
+            fprintf(stderr, "Invalid traveler source or destination\n");
+            freeGraph(graph);
+            fclose(file);
+            return 1;
+        }
+        travelers[i].color = colors[i % 10];
+        travelers[i].active = true;
         travelers[i].entityPosition = nodePositions[travelers[i].startNode].position;
-        travelers[i].pid = 0; travelers[i].pathLength = 0;
+        travelers[i].pid = 0;
+        travelers[i].pathLength = 0;
         travelers[i].currentFromNode = travelers[i].startNode;
         travelers[i].currentToNode = travelers[i].startNode;
         travelers[i].moveProgress = 1.0f;
     }
     fclose(file);
+
     if (pipe(pipefd) == -1) {
-    perror("pipe");
-    freeGraph(graph);
-    return 1;
-}
+        perror("pipe");
+        freeGraph(graph);
+        return 1;
+    }
 
-if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
-    perror("fcntl");
-    close(pipefd[0]);
-    close(pipefd[1]);
-    freeGraph(graph);
-    return 1;
-}
+    if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
+        perror("fcntl");
+        close(pipefd[0]);
+        close(pipefd[1]);
+        freeGraph(graph);
+        return 1;
+    }
 
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 5 ");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graph Visualization - Milestone 5");
     SetTargetFPS(60);
+
     while (!WindowShouldClose()) {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){10, 10, 100, 30})) {
             if (animationState == STATE_IDLE) { animationState = STATE_RUNNING; StartTravelers(graph); }
@@ -281,6 +290,14 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
             while (read(pipefd[0], &m, sizeof(IPCMessage)) > 0) {
                 for (int i = 0; i < numTravelers; i++) {
                     if (travelers[i].pid == m.pid) {
+
+                        // *** CHANGE 2: Handle special no-path message from child ***
+                        if (m.arrivedAt == -2) {
+                            printf("[PID=%d] no path found\n", m.pid);
+                            travelers[i].active = false;
+                            break;
+                        }
+
                         if (m.finished) {
                             travelers[i].active = false;
                             printf("[PID=%d] finished\n", m.pid);
@@ -288,9 +305,6 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                             if (m.nextNode == -1) printf("[PID=%d] arrived at node %d | DESTINATION\n", m.pid, m.arrivedAt);
                             else printf("[PID=%d] arrived at node %d | next node: %d\n", m.pid, m.arrivedAt, m.nextNode);
 
-                            /* Build path incrementally from IPC messages (parent never runs Dijkstra).
-                               Append arrivedAt first, then nextNode immediately — so the line
-                               arrivedAt->nextNode is drawn BEFORE the ball starts moving along it. */
                             if (travelers[i].pathLength == 0 ||
                                 travelers[i].path[travelers[i].pathLength - 1] != m.arrivedAt) {
                                 if (travelers[i].pathLength < MAX_NODES)
@@ -304,16 +318,14 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                                 }
                             }
 
-                            // Start smooth move to next node
                             if (m.nextNode != -1) {
                                 travelers[i].currentFromNode = m.arrivedAt;
                                 travelers[i].currentToNode = m.nextNode;
                                 travelers[i].moveProgress = 0.0f;
-                                // Calculate duration based on edge weight
                                 int weight = 0; Edge* e = graph->adjList[m.arrivedAt].head;
                                 while (e) { if (e->destination == m.nextNode) { weight = e->weight; break; } e = e->next; }
-                                if (weight <= 0) weight = 1; // Guard against division by zero
-                                travelers[i].moveDuration = weight * 0.3f; // Same as usleep factor
+                                if (weight <= 0) weight = 1;
+                                travelers[i].moveDuration = weight * 0.3f;
                             } else {
                                 travelers[i].entityPosition = nodePositions[m.arrivedAt].position;
                                 travelers[i].moveProgress = 1.0f;
@@ -337,7 +349,15 @@ if (fcntl(pipefd[0], F_SETFL, O_NONBLOCK) == -1) {
                 }
             }
         }
-        BeginDrawing(); ClearBackground(RAYWHITE); DrawGraph(graph); EndDrawing();
+
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawGraph(graph);
+        EndDrawing();
     }
-    KillAllTravelers(); freeGraph(graph); CloseWindow(); return 0;
+
+    KillAllTravelers();
+    freeGraph(graph);
+    CloseWindow();
+    return 0;
 }
